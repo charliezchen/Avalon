@@ -92,8 +92,8 @@ function shuffle(array) {
 //     num += 1;
 
 // })
-
-Http.listen(3000, () => {
+const PORT = process.env.PORT || 3000;
+Http.listen(PORT, () => {
     console.log("Listening at :3000...");
 })
 
