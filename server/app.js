@@ -88,8 +88,8 @@ function generate_identities(number_of_players) {
     var permutation = shuffle([...Array(number_of_players).keys()]);
 
     var merlinVC = []; // viewer context of Merlin: can see all red team
-    var percivalVC = []; // viewer context of Percival
-    var redVC = []; // viewer context of all red teams (excluding Pacivial)
+    var percivalVC = []; // viewer context of Percival: can see Merlin and Morgana
+    var redVC = []; // viewer context of all red teams (excluding Oberon): can see each other
 
     for (let i = 0; i < number_of_players; i++) {
         var identity = all_identities[permutation[i]];
