@@ -1,18 +1,18 @@
 <template>
   <div id="app">
-    <Avalon msg="Welcome to Your Vue.js App"/>
+    <Avalon />
   </div>
 </template>
 
 <script>
-import Avalon from './components/Avalon.vue'
+import Avalon from "./components/Avalon.vue";
 
 export default {
-  name: 'App',
+  name: "App",
   components: {
-    Avalon
-  }
-}
+    Avalon,
+  },
+};
 </script>
 
 <style>
