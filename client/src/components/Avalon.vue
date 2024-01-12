@@ -29,20 +29,40 @@
     </div>
 
     <!-- Voting -->
-    <button v-if="gameStage === 'roles' && is_host" @click="proceedToNextStage">Proceed to next stage</button>
-    <div v-if="gameStage === 'voting'">
+
+
+    <!-- Voting Selection Interface -->
+    <div v-if="gameStage === 'selectPlayers'">
+      <p>Select players for the vote:</p>
+      <div v-for="user in all_users" :key="user.userID">
+        <input type="checkbox" :value="user.name" v-model="selectedVoters">
+        {{ user.name }}
+      </div>
+      <button v-if="voteResults.length > 0" @click="gameStage = 'results'">Cancel</button>
+      <button @click="submitVoterSelection">Submit Selection</button>
+    </div>
+
+    <div v-if="gameStage === 'voting-vote'">
       <p>Vote for the mission outcome:</p>
       <button v-if="!voteSubmitted" @click="submitVote('success')">Success</button>
       <button v-if="!voteSubmitted" @click="submitVote('failure')">Failure</button>
       <p v-if="voteSubmitted">Vote submitted. Awaiting other players...</p>
     </div>
 
+    <div v-if="gameStage === 'voting-no-vote'">
+      <p>You are not selected to vote. Awaiting other players...</p>
+    </div>
+
     <!-- Displaying results -->
     <div v-if="gameStage === 'results'">
       <p>Vote Results:</p>
-      <ul>
-        <li v-for="(vote, index) in voteResults" :key="index">{{ vote }}</li>
-      </ul>
+      <p>Successes: {{ voteResults.success }}</p>
+      <p>Failures: {{ voteResults.failure }}</p>
+    </div>
+
+    <!-- Interface to Propose a Vote -->
+    <div v-if="gameStage === 'roles' || gameStage === 'results'">
+      <button @click="proposeVote">Propose a Vote</button>
     </div>
   </div>
 </template>
@@ -56,8 +76,8 @@ room.connect();
 const game = io("http://localhost:3000/game", { autoConnect: false });
 
 // Debugging: Log all socket events
-game.onAny((event, ...args) => console.log(event, args));
-room.onAny((event, ...args) => console.log(event, args));
+// game.onAny((event, ...args) => console.log(event, args));
+// room.onAny((event, ...args) => console.log(event, args));
 
 export default {
   name: "Avalon",
@@ -74,6 +94,7 @@ export default {
       gameStage: '', // 'voting', 'results', etc.
       voteSubmitted: false,
       voteResults: [],
+      selectedVoters: [],
     };
   },
   created() {
@@ -116,6 +137,7 @@ export default {
       this.name_selected = true;
       this.room.emit("join", name);
       this.game.connect();
+      this.game.emit("join", name);
     },
     start() {
       this.game.emit("start", 1);
@@ -130,6 +152,13 @@ export default {
     proceedToNextStage() {
       this.gameStage = 'voting';
       this.game.emit('nextStage');
+    },
+    proposeVote() {
+      this.gameStage = 'selectPlayers';
+    },
+    submitVoterSelection() {
+      this.game.emit('proposeVote', this.selectedVoters);
+      this.selectedVoters = [];
     },
   },
 };

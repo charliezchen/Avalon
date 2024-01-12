@@ -13,52 +13,68 @@ Sock.on("connection", (socket) => {
     socket.emit("users", players);
 
     socket.on("join", (name) => {
-        players.push({ userID: socket.id, name: name });
+        players.push({ userID: players.length, name: name });
         socket.name = name;
         socket.emit("users", players);
         socket.broadcast.emit("users", players);
     });
 
     socket.on("disconnect", () => {
-        players = players.filter((player) => player.userID !== socket.id);
+        players = players.filter((player) => player.name !== socket.name);
         socket.broadcast.emit("users", players);
     });
 });
 
-let votes = {};
+let currentVote = {
+    proposer: null,
+    selectedVoters: [],
+    votes: {}
+};
+
 const game = Sock.of("/game");
 game.on("connection", (socket) => {
+    
+    socket.on("join", (name) => {
+        socket.name = name;
+    })
 
     socket.on("start", () => {
-        console.log("receive start");
         const users = [];
         for (let [id, socket] of Sock.of("/game").sockets) {
-            users.push({
-                userID: id,
-                name: socket.name,
-                sock: socket,
-            });
+            users.push(socket);
         }
 
         const identities = generate_identities(users.length);
 
-        for (const [index, user] of users.entries()) {
-            user.sock.emit("identity", identities[index]);
+        for (const [index, sock] of users.entries()) {
+            sock.emit("identity", identities[index]);
         }
     });
-
-    socket.on("nextStage", () => {
-        socket.broadcast.emit("updateStage", "voting");
-        votes = {}; // Reset votes for the new stage
-      });
+    
+    socket.on("proposeVote", (selectedVoters) => {
+        currentVote.proposer = socket.id;
+        currentVote.selectedVoters = selectedVoters;
+        currentVote.votes = {};
+        game.to(currentVote.proposer).emit("voteInitiated");
+        for (let [id, socket] of Sock.of("/game").sockets) {
+            if (currentVote.selectedVoters.includes(socket.name)) {
+                socket.emit("updateStage", "voting-vote");
+            } else {
+                socket.emit("updateStage", "voting-no-vote");
+            }
+        }
+    });
     
     socket.on("submitVote", (vote) => {
-        votes[socket.id] = vote;
-        if (Object.keys(votes).length === players.length) {
-            socket.emit("voteResults", Object.values(votes));
-            socket.broadcast.emit("voteResults", Object.values(votes));
+        currentVote.votes[socket.id] = vote;
+        if (Object.keys(currentVote.votes).length === currentVote.selectedVoters.length) {
+            let voteResults = Object.values(currentVote.votes);
+            let success = voteResults.filter((vote) => vote === "success").length;
+            let failure = voteResults.filter((vote) => vote === "failure").length;
+            game.emit("voteResults", { success, failure });
+            currentVote = { proposer: null, selectedPlayers: [], votes: {} };
         }
-    });
+      });
 })
 
 
