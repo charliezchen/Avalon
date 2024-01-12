@@ -7,38 +7,31 @@ const Sock = require("socket.io")(Http, {
     },
 });
 
-Sock.use((socket, next) => {
-    const name = socket.handshake.auth.name;
-    if (!name) {
-        return next(new Error("invalid name"));
-    }
-    socket.name = name;
-    next();
-});
+let players = [];
 
 Sock.on("connection", (socket) => {
-    const users = [];
-    for (let [id, socket] of Sock.of("/").sockets) {
-        users.push({
-            userID: id,
-            name: socket.name,
-        });
-    }
-    socket.emit("users", users);
+    socket.emit("users", players);
 
-    socket.broadcast.emit("user connected", {
-        userID: socket.id,
-        name: socket.name,
+    socket.on("join", (name) => {
+        players.push({ userID: socket.id, name: name });
+        socket.name = name;
+        socket.emit("users", players);
+        socket.broadcast.emit("users", players);
     });
 
     socket.on("disconnect", () => {
-        socket.broadcast.emit("user disconnected", socket.id);
+        players = players.filter((player) => player.userID !== socket.id);
+        socket.broadcast.emit("users", players);
     });
+});
+
+const game = Sock.of("/game");
+game.on("connection", (socket) => {
 
     socket.on("start", () => {
         console.log("receive start");
         const users = [];
-        for (let [id, socket] of Sock.of("/").sockets) {
+        for (let [id, socket] of Sock.of("/game").sockets) {
             users.push({
                 userID: id,
                 name: socket.name,
@@ -52,7 +45,7 @@ Sock.on("connection", (socket) => {
             user.sock.emit("identity", identities[index]);
         }
     });
-});
+})
 
 function shuffle(array) {
     let currentIndex = array.length,

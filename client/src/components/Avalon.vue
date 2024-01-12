@@ -1,19 +1,22 @@
 <template>
   <div>
     <span>Avalon Game Helper</span>
-    <p>Name:</p>
-    <input type="text" v-model="name" />
-    <button v-on:click="join(name)">Create/Join</button>
+
+    <div v-if="!name_selected">
+      <p>Name:</p>
+      <input type="text" v-model="name" />
+      <button v-on:click="join(name)">Create/Join</button>
+    </div>
+
+    <p>Number of players: {{ num_people }}</p>
+    <ul>
+      <li v-for="u in all_users" v-bind:key="u.userID">{{ u.name }}</li>
+    </ul>
 
     <div v-if="name_selected">
-      <p>Number of people {{ num_people }}</p>
-      <ul>
-        <li v-for="u in all_users" v-bind:key="u.userID">{{ u.name }}</li>
-      </ul>
-
       <p v-if="is_host && all_users.length < 5">You are the host</p>
       <p v-if="all_users.length < 5">
-        Waiting for at least 5 player to join ...
+        Waiting for at least 5 players to join ...
       </p>
       <p v-if="all_users.length >= 5 && !identity.identity">
         Waiting for {{ all_users[0].name }} to start the game ...
@@ -32,12 +35,19 @@
 <script>
 import io from "socket.io-client";
 
-const socket = io("http://localhost:3000", {
+const room = io("http://localhost:3000", {
+  autoConnect: false,
+});
+room.connect();
+const game = io("http://localhost:3000/game", {
   autoConnect: false,
 });
 
 // For debug
-socket.onAny((event, ...args) => {
+game.onAny((event, ...args) => {
+  console.log(event, args);
+});
+room.onAny((event, ...args) => {
   console.log(event, args);
 });
 
@@ -50,30 +60,26 @@ export default {
         identity: "",
         viewerContext: [],
       },
-      socket: socket,
+      game: game,
+      room: room,
       name_selected: false,
       all_users: [],
       is_host: false,
     };
   },
   created() {
-    this.socket.on("connect_error", (err) => {
-      this.name_selected = false;
-      console.log(err);
+    this.room.on("name", (name) => {
+      this.name = name;
+      this.name_selected = true;
     });
-    this.socket.on("users", (data) => {
+    this.room.on("users", (data) => {
       this.all_users = data;
-      if (this.all_users.length == 1) this.is_host = true;
+      if (this.all_users.length > 0 && this.all_users[0].name == this.name) {
+        this.is_host = true;
+      }
       console.log(data);
     });
-    this.socket.on("user connected", (data) => {
-      this.all_users.push(data);
-    });
-    this.socket.on("user disconnected", (userID) => {
-      this.all_users = this.all_users.filter((uid) => uid.userID != userID);
-      console.log(this.all_users);
-    });
-    this.socket.on("identity", (identity) => {
+    this.game.on("identity", (identity) => {
       console.log("receive identity", identity);
       this.identity = identity;
       this.identity.viewerContext = this.identity.viewerContext.map(
@@ -82,10 +88,10 @@ export default {
     });
   },
   mounted() {
-    // diff?
   },
   destroyed() {
-    socket.off("connect_error");
+    this.room.off("connect_error");
+    this.game.off("connect_error");
   },
   computed: {
     num_people() {
@@ -95,18 +101,13 @@ export default {
   methods: {
     join(name) {
       this.name_selected = true;
-      this.socket.auth = { name };
-      this.socket.connect();
-
-      // this.socket.on("position", data => {
-      //     console.log(data)
-      // })
-
+      this.room.emit("join", name);
+      this.game.connect();
       console.log("name", name);
     },
     start() {
       console.log("start");
-      this.socket.emit("start", 1);
+      this.game.emit("start", 1);
     },
   },
 };
