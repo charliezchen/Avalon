@@ -25,6 +25,7 @@ Sock.on("connection", (socket) => {
     });
 });
 
+let votes = {};
 const game = Sock.of("/game");
 game.on("connection", (socket) => {
 
@@ -45,7 +46,21 @@ game.on("connection", (socket) => {
             user.sock.emit("identity", identities[index]);
         }
     });
+
+    socket.on("nextStage", () => {
+        socket.broadcast.emit("updateStage", "voting");
+        votes = {}; // Reset votes for the new stage
+      });
+    
+    socket.on("submitVote", (vote) => {
+        votes[socket.id] = vote;
+        if (Object.keys(votes).length === players.length) {
+            socket.emit("voteResults", Object.values(votes));
+            socket.broadcast.emit("voteResults", Object.values(votes));
+        }
+    });
 })
+
 
 function shuffle(array) {
     let currentIndex = array.length,

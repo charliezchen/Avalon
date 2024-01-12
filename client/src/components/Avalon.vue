@@ -27,6 +27,23 @@
         <p v-if="showIdentity">People you can see: {{ identity.viewerContext }}</p>
       </div>
     </div>
+
+    <!-- Voting -->
+    <button v-if="gameStage === 'roles' && is_host" @click="proceedToNextStage">Proceed to next stage</button>
+    <div v-if="gameStage === 'voting'">
+      <p>Vote for the mission outcome:</p>
+      <button v-if="!voteSubmitted" @click="submitVote('success')">Success</button>
+      <button v-if="!voteSubmitted" @click="submitVote('failure')">Failure</button>
+      <p v-if="voteSubmitted">Vote submitted. Awaiting other players...</p>
+    </div>
+
+    <!-- Displaying results -->
+    <div v-if="gameStage === 'results'">
+      <p>Vote Results:</p>
+      <ul>
+        <li v-for="(vote, index) in voteResults" :key="index">{{ vote }}</li>
+      </ul>
+    </div>
   </div>
 </template>
 
@@ -54,6 +71,9 @@ export default {
       all_users: [],
       is_host: false,
       showIdentity: true,
+      gameStage: '', // 'voting', 'results', etc.
+      voteSubmitted: false,
+      voteResults: [],
     };
   },
   created() {
@@ -82,6 +102,14 @@ export default {
       this.game.on("identity", identity => {
         this.identity = identity;
         this.identity.viewerContext = this.identity.viewerContext.map(id => this.all_users[id].name);
+        this.gameStage = 'roles';
+      });
+      this.game.on("updateStage", stage => {
+        this.gameStage = stage;
+      });
+      this.game.on("voteResults", voteResults => {
+        this.voteResults = voteResults;
+        this.gameStage = 'results';
       });
     },
     join(name) {
@@ -94,6 +122,14 @@ export default {
     },
     toggleIdentity() {
       this.showIdentity = !this.showIdentity;
+    },
+    submitVote(vote) {
+      this.voteSubmitted = true;
+      this.game.emit('submitVote', vote);
+    },
+    proceedToNextStage() {
+      this.gameStage = 'voting';
+      this.game.emit('nextStage');
     },
   },
 };
