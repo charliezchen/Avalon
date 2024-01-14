@@ -26,7 +26,8 @@
 <script>
 import io from 'socket.io-client';
 
-const socket = io("http://localhost:3000", {
+const serverUrl = process.env.VUE_APP_SERVER_URL || 'http://localhost:3000';
+const socket = io(`${serverUrl}`, {
   autoConnect: false
 })
 
