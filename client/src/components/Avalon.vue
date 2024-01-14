@@ -1,116 +1,173 @@
 <template>
   <div>
     <span>Avalon Game Helper</span>
-    <p>Name:</p>
-    <input type="text" v-model="name">
-    <button v-on:click="join(name)">Create/Join</button>
 
-    <div v-if="name_selected">
-      <p>Number of people {{ num_people }}</p>
-      <ul>
-        <li v-for="u in all_users" v-bind:key="u.userID"> {{ u.name }}</li>
-      </ul>
-
-      <p v-if="is_host && all_users.length < 5">You are the host</p>
-      <p v-if="all_users.length < 5">Waiting for at least 5 player to join ...</p>
-      <p v-if="all_users.length >= 5 && !identity.identity">Waiting for {{ all_users[0].name }} to start the game ...</p>
-      <button v-on:click="start()" v-if="is_host && all_users.length >= 5">Start game</button>
-      <p v-if="identity.identity">Identity: {{ identity.identity }}</p>
-      <p v-if="identity.identity">People you can see: {{ identity.viewerContext }}</p>
+    <!-- Section for joining the game -->
+    <div v-if="!name_selected">
+      <p>Name:</p>
+      <input type="text" v-model="name" />
+      <button v-on:click="join(name)">Create/Join</button>
     </div>
 
+    <!-- Display the number of players -->
+    <p>Number of players: {{ num_people }}</p>
+    <ul>
+      <li v-for="user in all_users" :key="user.userID">{{ user.name }}</li>
+    </ul>
 
+    <!-- Game actions and information after joining -->
+    <div v-if="name_selected">
+      <p v-if="is_host && all_users.length < 5">You are the host</p>
+      <p v-if="all_users.length < 5">Waiting for at least 5 players to join ...</p>
+      <p v-if="all_users.length >= 5 && !identity.identity">Waiting for {{ all_users[0].name }} to start the game ...</p>
+      <button v-if="is_host && all_users.length >= 5" v-on:click="start()">Start game</button>
+      <div v-if="identity.identity">
+        <button @click="toggleIdentity">Show/Hide Identity</button>
+        <p v-if="showIdentity">Identity: {{ identity.identity }}</p>
+        <p v-if="showIdentity">People you can see: {{ identity.viewerContext }}</p>
+      </div>
+    </div>
+
+    <!-- Voting -->
+
+
+    <!-- Voting Selection Interface -->
+    <div v-if="gameStage === 'selectPlayers'">
+      <p>Select players for the vote:</p>
+      <div v-for="user in all_users" :key="user.userID">
+        <input type="checkbox" :value="user.name" v-model="selectedVoters">
+        {{ user.name }}
+      </div>
+      <button v-if="voteResults.length > 0" @click="gameStage = 'results'">Cancel</button>
+      <button @click="submitVoterSelection">Submit Selection</button>
+    </div>
+
+    <div v-if="gameStage === 'voting-vote'">
+      <p>Vote for the mission outcome:</p>
+      <button v-if="!voteSubmitted" @click="submitVote('success')">Success</button>
+      <button v-if="!voteSubmitted" @click="submitVote('failure')">Failure</button>
+      <p v-if="voteSubmitted">Vote submitted. Awaiting other players...</p>
+    </div>
+
+    <div v-if="gameStage === 'voting-no-vote'">
+      <p>You are not selected to vote. Awaiting other players...</p>
+    </div>
+
+    <!-- Displaying results -->
+    <div v-if="gameStage === 'results'">
+      <p>Vote Results:</p>
+      <p>Successes: {{ voteResults.success }}</p>
+      <p>Failures: {{ voteResults.failure }}</p>
+    </div>
+
+    <!-- Interface to Propose a Vote -->
+    <div v-if="gameStage === 'roles' || gameStage === 'results'">
+      <button @click="proposeVote">Propose a Vote</button>
+    </div>
   </div>
 </template>
 
 <script>
-import io from 'socket.io-client';
+
+import io from "socket.io-client";
 
 const serverUrl = process.env.VUE_APP_SERVER_URL || 'http://localhost:3000';
-const socket = io(`${serverUrl}`, {
-  autoConnect: false
-})
 
-// For debug
-socket.onAny((event, ...args) => {
-  console.log(event, args)
-})
+// Socket.io connection setup
+const room = io(`${serverUrl}`, { autoConnect: false });
+room.connect();
+const game = io(`${serverUrl}/game`, { autoConnect: false });
 
+// Debugging: Log all socket events
+// game.onAny((event, ...args) => console.log(event, args));
+// room.onAny((event, ...args) => console.log(event, args));
 
 export default {
-  name: 'Avalon',
+  name: "Avalon",
   data() {
     return {
       name: "",
-      identity: {
-        identity: "",
-        viewerContext: [],
-      },
-      socket: socket,
+      identity: { identity: "", viewerContext: [] },
+      game,
+      room,
       name_selected: false,
       all_users: [],
       is_host: false,
-    }
+      showIdentity: true,
+      gameStage: '', // 'voting', 'results', etc.
+      voteSubmitted: false,
+      voteResults: [],
+      selectedVoters: [],
+    };
   },
   created() {
-    this.socket.on("connect_error", (err) => {
-      this.name_selected = false;
-      console.log(err);
-
-    });
-    this.socket.on("users", data => {
-      this.all_users = data;
-      if (this.all_users.length == 1)
-        this.is_host = true;
-      console.log(data)
-    });
-    this.socket.on("user connected", data => {
-      this.all_users.push(data)
-    });
-    this.socket.on("user disconnected", userID => {
-      this.all_users = this.all_users.filter(uid => uid.userID != userID)
-      console.log(this.all_users)
-    });
-    this.socket.on("identity", identity => {
-      console.log("receive identity", identity);
-      this.identity = identity;
-      this.identity.viewerContext =
-        this.identity.viewerContext.map(id => this.all_users[id].name);
-    });
-
+    this.setupSocketListeners();
   },
-  mounted() { // diff?
-
-  },
+  mounted() {},
   destroyed() {
-    socket.off("connect_error");
+    this.room.off("connect_error");
+    this.game.off("connect_error");
   },
   computed: {
     num_people() {
       return this.all_users.length;
-    }
+    },
   },
   methods: {
+    setupSocketListeners() {
+      this.room.on("name", name => {
+        this.name = name;
+        this.name_selected = true;
+      });
+      this.room.on("users", data => {
+        this.all_users = data;
+        this.is_host = this.all_users.length > 0 && this.all_users[0].name === this.name;
+      });
+      this.game.on("identity", identity => {
+        this.identity = identity;
+        this.identity.viewerContext = this.identity.viewerContext.map(id => this.all_users[id].name);
+        this.gameStage = 'roles';
+      });
+      this.game.on("updateStage", stage => {
+        this.gameStage = stage;
+      });
+      this.game.on("voteResults", voteResults => {
+        this.voteResults = voteResults;
+        this.gameStage = 'results';
+      });
+    },
     join(name) {
       this.name_selected = true;
-      this.socket.auth = { name };
-      this.socket.connect();
-
-      // this.socket.on("position", data => {
-      //     console.log(data)
-      // })
-
-      console.log("name", name)
+      this.room.emit("join", name);
+      this.game.connect();
+      this.game.emit("join", name);
     },
     start() {
-      console.log("start")
-      this.socket.emit("start", 1);
-    }
+      this.game.emit("start", 1);
+    },
+    toggleIdentity() {
+      this.showIdentity = !this.showIdentity;
+    },
+    submitVote(vote) {
+      this.voteSubmitted = true;
+      this.game.emit('submitVote', vote);
+    },
+    proceedToNextStage() {
+      this.gameStage = 'voting';
+      this.game.emit('nextStage');
+    },
+    proposeVote() {
+      this.gameStage = 'selectPlayers';
+    },
+    submitVoterSelection() {
+      this.game.emit('proposeVote', this.selectedVoters);
+      this.selectedVoters = [];
+    },
   },
-
-}
+};
 </script>
 
-<!-- Add "scoped" attribute to limit CSS to this component only -->
+<!-- Placeholder for future scoped CSS -->
 <style scoped>
+/* Styles specific to this component */
 </style>
