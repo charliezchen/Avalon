@@ -68,12 +68,15 @@
 </template>
 
 <script>
+
 import io from "socket.io-client";
 
+const serverUrl = process.env.VUE_APP_SERVER_URL || 'http://localhost:3000';
+
 // Socket.io connection setup
-const room = io("http://localhost:3000", { autoConnect: false });
+const room = io(`${serverUrl}`, { autoConnect: false });
 room.connect();
-const game = io("http://localhost:3000/game", { autoConnect: false });
+const game = io(`${serverUrl}/game`, { autoConnect: false });
 
 // Debugging: Log all socket events
 // game.onAny((event, ...args) => console.log(event, args));
