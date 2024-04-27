@@ -70,6 +70,9 @@ export default {
     this.socket.on("user disconnected", userID => {
       this.all_users = this.all_users.filter(uid => uid.userID != userID)
       console.log(this.all_users)
+      if (this.all_users && this.all_users[0].userID == this.socket.id) {
+        this.is_host = true;
+      }
     });
     this.socket.on("identity", identity => {
       console.log("receive identity", identity);
