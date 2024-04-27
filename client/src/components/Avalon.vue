@@ -5,7 +5,7 @@
     <input type="text" v-model="name">
     <button v-on:click="join(name)">Create/Join</button>
 
-    <div v-if="name_selected">
+    <div v-if="joined">
       <p>Number of people {{ num_people }}</p>
       <ul>
         <li v-for="u in all_users" v-bind:key="u.userID"> {{ u.name }}</li>
@@ -47,14 +47,14 @@ export default {
         viewerContext: [],
       },
       socket: socket,
-      name_selected: false,
+      joined: false,
       all_users: [],
       is_host: false,
     }
   },
   created() {
     this.socket.on("connect_error", (err) => {
-      this.name_selected = false;
+      this.joined = false;
       console.log(err);
 
     });
@@ -95,7 +95,7 @@ export default {
   },
   methods: {
     join(name) {
-      this.name_selected = true;
+      this.joined = true;
       this.socket.auth = { name };
       this.socket.connect();
 
