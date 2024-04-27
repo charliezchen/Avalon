@@ -90,6 +90,7 @@ function generate_identities(number_of_players) {
     var merlinVC = []; // viewer context of Merlin: can see all red team
     var percivalVC = []; // viewer context of Percival: can see Merlin and Morgana
     var redVC = []; // viewer context of all red teams (excluding Oberon): can see each other
+    var lancelotVC = []; // viewer context of Lancelot who can only see Morgana
 
     for (let i = 0; i < number_of_players; i++) {
         var identity = all_identities[permutation[i]];
@@ -106,11 +107,16 @@ function generate_identities(number_of_players) {
             case 'Percival':
                 identities[i].viewerContext = percivalVC;
                 break;
+            case 'Lancelot':
+                merlinVC.push(i);
+                identities[i].viewerContext = lancelotVC;
+                redVC.push(i);
+                break;
 
             case 'Morgana':
                 percivalVC.push(i);
+                lancelotVC.push(i);
             case 'Assasin':
-            case 'Lancelot':
                 merlinVC.push(i);
             case 'Mordred':
                 identities[i].viewerContext = redVC;
