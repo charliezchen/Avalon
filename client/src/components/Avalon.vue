@@ -1,30 +1,42 @@
 <template>
   <div>
-    <span>Avalon Game Helper</span>
-    <p>Name:</p>
-    <input type="text" v-model="name">
-    <button v-on:click="join(name)">Create/Join</button>
-
-    <div v-if="name_selected">
-      <p>Number of people {{ num_people }}</p>
-      <ul>
-        <li v-for="u in all_users" v-bind:key="u.userID"> {{ u.name }}</li>
-      </ul>
-
-      <p v-if="is_host && all_users.length < 5">You are the host</p>
-      <p v-if="all_users.length < 5">Waiting for at least 5 player to join ...</p>
-      <p v-if="all_users.length >= 5 && !identity.identity">Waiting for {{ all_users[0].name }} to start the game ...</p>
-      <button v-on:click="start()" v-if="is_host && all_users.length >= 5">Start game</button>
-      <p v-if="identity.identity">Identity: {{ identity.identity }}</p>
-      <p v-if="identity.identity">People you can see: {{ identity.viewerContext }}</p>
+    <span>Avalon Game Helper 2.0</span>
+    
+    <div v-if="!joined">
+      <p>You haven't joined</p>
+      <p>Name:</p>
+      <input type="text" v-model="name">
+      <button v-on:click="join(name)">Create/Join</button>
+    </div>
+    
+    <div v-if="joined">
+      <p>You joined. To quit, refresh the page</p>
+      <p>Name:</p>
+      <input type="text" v-model="name" disabled>
+      <button v-on:click="join(name)" disabled>Create/Join</button>
     </div>
 
+    <p>There are currenly {{ all_users.length }} people in the room</p>
+    <ul>
+      <li v-for="u in all_users" v-bind:key="u.userID">
+        {{ u.name }}
+        <span v-if="u.userID === socket.id"> (you) </span>
+      </li>
+    </ul>
 
+    <p v-if="is_host && all_users.length < 5">You are the host</p>
+    <p v-if="all_users.length < 5">Waiting for at least 5 player to join ...</p>
+    <p v-if="all_users.length >= 5 && !identity.identity">Waiting for {{ all_users[0].name }} to start the game ...</p>
+    
+    <button v-on:click="start()" v-if="is_host && all_users.length >= 5">Start game</button>
+    <p v-if="identity.identity">Identity: {{ identity.identity }}</p>
+    <p v-if="identity.identity">People you can see: {{ identity.viewerContext }}</p>
   </div>
 </template>
 
 <script>
 import io from 'socket.io-client';
+import { v4 as uuidv4 } from 'uuid';
 
 const serverUrl = process.env.VUE_APP_SERVER_URL || 'http://localhost:3000';
 const socket = io(`${serverUrl}`, {
@@ -41,76 +53,60 @@ export default {
   name: 'Avalon',
   data() {
     return {
+      clientID: uuidv4(),
       name: "",
       identity: {
         identity: "",
         viewerContext: [],
       },
       socket: socket,
-      name_selected: false,
+      joined: false,
       all_users: [],
       is_host: false,
     }
   },
   created() {
+    this.socket.auth = { name: this.clientID };
+    if (!this.socket.connected) {
+      this.socket.connect();
+    }
     this.socket.on("connect_error", (err) => {
-      this.name_selected = false;
+      this.joined = false;
       console.log(err);
-
     });
     this.socket.on("users", data => {
       this.all_users = data;
-      if (this.all_users.length == 1)
-        this.is_host = true;
-      console.log(data)
-    });
-    this.socket.on("user connected", data => {
-      this.all_users.push(data)
-    });
-    this.socket.on("user disconnected", userID => {
-      this.all_users = this.all_users.filter(uid => uid.userID != userID)
-      console.log(this.all_users)
-      if (this.all_users && this.all_users[0].userID == this.socket.id) {
-        this.is_host = true;
-      }
+      this.is_host = this.all_users.length > 0 && this.all_users[0].userID === this.socket.id;
+      console.log("Updated user list:", data);
     });
     this.socket.on("identity", identity => {
-      console.log("receive identity", identity);
+      console.log("Received identity", identity);
       this.identity = identity;
       this.identity.viewerContext =
         this.identity.viewerContext.map(id => this.all_users[id].name);
     });
-
-  },
-  mounted() { // diff?
-
   },
   destroyed() {
-    socket.off("connect_error");
-  },
-  computed: {
-    num_people() {
-      return this.all_users.length;
-    }
+    // remove the listeners for the corresponding events
+    this.socket.off("connect_error");
+    this.socket.off("users");
+    this.socket.off("identity");
+    this.socket.disconnect();
   },
   methods: {
     join(name) {
-      this.name_selected = true;
-      this.socket.auth = { name };
-      this.socket.connect();
-
-      // this.socket.on("position", data => {
-      //     console.log(data)
-      // })
-
-      console.log("name", name)
+      this.name = name;
+      if (!this.socket.connected) {
+        this.socket.connect();
+      }
+      this.socket.emit("join_room", name);
+      this.joined = true;
+      console.log("Joined room as: ", name);
     },
     start() {
-      console.log("start")
-      this.socket.emit("start", 1);
+      this.socket.emit("start");
     }
   },
-
 }
 </script>
 

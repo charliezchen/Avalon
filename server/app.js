@@ -17,43 +17,47 @@ Sock.use((socket, next) => {
     next();
 })
 
+const roomUsers = new Map();
 Sock.on("connection", socket => {
-    const users = [];
-    for (let [id, socket] of Sock.of("/").sockets) {
-        users.push({
-            userID: id,
-            name: socket.name
-        })
-    }
-    socket.emit("users", users);
-
-    socket.broadcast.emit("user connected", {
-        userID: socket.id,
-        name: socket.name
-    })
+    updateUsersList();
+ 
+    socket.on("join_room", name => {
+        // Add the user to the roomUsers map when they emit "join_room"
+        roomUsers.set(socket.id, {
+            userID: socket.id,
+            name: name,
+            sock: socket
+        });
+        updateUsersList();
+    });
 
     socket.on("disconnect", () => {
-        socket.broadcast.emit("user disconnected", socket.id);
+        // Remove the user from roomUsers when they disconnect
+        if (roomUsers.has(socket.id)) {
+            roomUsers.delete(socket.id);
+            updateUsersList();
+        }
     });
 
     socket.on("start", () => {
-        console.log("receive start");
-        const users = [];
-        for (let [id, socket] of Sock.of("/").sockets) {
-            users.push({
-                userID: id,
-                name: socket.name,
-                sock: socket
-            })
-        }
-
+        const users = Array.from(roomUsers.values());
         const identities = generate_identities(users.length);
 
-        for (const [index, user] of users.entries()) {
+        users.forEach((user, index) => {
             user.sock.emit("identity", identities[index]);
-        }
-    })
+        });
+    });
+
+    function updateUsersList() {
+       // Convert the roomUsers map to an array and emit to all users
+       const usersArray = Array.from(roomUsers.values()).map(user => ({
+           userID: user.userID,
+           name: user.name
+       }));
+       Sock.emit("users", usersArray);
+    }
 })
+
 function shuffle(array) {
     let currentIndex = array.length, randomIndex;
 
